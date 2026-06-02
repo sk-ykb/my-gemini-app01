@@ -1,0 +1,1918 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Moog Synthesizer IIIc - Mathematical Model</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lora Font for Elegant LaTeX/Academic look -->
+  <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
+  
+  <!-- MathJax Configuration & Loader for LaTeX Formulas -->
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']]
+      },
+      options: {
+        skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+      }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" id="MathJax-script" async></script>
+
+  <style>
+    body {
+      font-family: 'Lora', 'Times New Roman', Times, serif;
+      background-color: #fcfbf9; /* Warm mathematical paper color */
+      color: #000000;
+      user-select: none;
+    }
+    /* Simple Academic Border */
+    .latex-container {
+      border: 1px solid #000000;
+      background-color: #ffffff;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+    }
+    .panel-academic {
+      border: 1px solid #000000;
+      background-color: #ffffff;
+    }
+    /* Vector Knob Style (Polar Coordinates) */
+    .knob-container {
+      position: relative;
+      cursor: ns-resize;
+    }
+    .knob-polar {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      border: 1px dashed #000000;
+      position: relative;
+      background-color: #ffffff;
+    }
+    .knob-center {
+      position: absolute;
+      width: 4px;
+      height: 4px;
+      background-color: #000000;
+      border-radius: 50%;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+    }
+    /* Perfect Center rotation using percent metric */
+    .knob-vector {
+      position: absolute;
+      width: 1px;
+      height: 50%; /* Radius length */
+      background-color: #000000;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      transform-origin: bottom center;
+    }
+    /* Circuit Switch Style */
+    .circuit-switch {
+      position: relative;
+      width: 40px;
+      height: 30px;
+      cursor: pointer;
+    }
+    .switch-line {
+      position: absolute;
+      height: 1px;
+      background-color: #000000;
+      top: 15px;
+    }
+    .switch-pole {
+      position: absolute;
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background-color: #000000;
+      top: 13px;
+    }
+    .switch-lever {
+      position: absolute;
+      height: 1px;
+      background-color: #000000;
+      width: 20px;
+      top: 15px;
+      left: 10px;
+      transform-origin: left center;
+      transition: transform 0.15s ease;
+      transform: rotate(-30deg); /* Open / OFF state */
+    }
+    .circuit-switch.on .switch-lever {
+      transform: rotate(0deg); /* Closed / ON state */
+    }
+    /* Mathematical Point Jack */
+    .jack-socket {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      border: 1px solid #000000;
+      background-color: #ffffff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      cursor: pointer;
+      transition: background-color 0.1s;
+    }
+    .jack-inner {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background-color: #000000;
+    }
+    .jack-socket.active {
+      background-color: #f3f4f6;
+      border-width: 2px;
+    }
+    
+    /* Academic Keyboard Styling - Precise 1px Grid alignment */
+    .white-key {
+      background-color: #ffffff;
+      border-right: 1px solid #000000;
+      border-bottom: 1px solid #000000;
+    }
+    .white-key.active {
+      background-color: #f0f0f0;
+    }
+    /* Black keys with mathematical hatching */
+    .black-key {
+      background-color: #ffffff;
+      border-left: 1px solid #000000;
+      border-right: 1px solid #000000;
+      border-bottom: 1px solid #000000;
+      background-image: repeating-linear-gradient(45deg, #000 0, #000 1px, transparent 0, transparent 4px);
+    }
+    .black-key.active {
+      background-color: #e5e5e5;
+      background-image: repeating-linear-gradient(45deg, #000 0, #000 2px, transparent 0, transparent 4px);
+    }
+  </style>
+</head>
+<body class="p-2 md:p-6 min-h-screen flex flex-col items-center">
+
+  <!-- Main Scientific Frame -->
+  <div class="latex-container w-full max-w-7xl rounded p-4 md:p-8 flex flex-col gap-6 relative">
+    
+    <!-- SVG Patch Cables Overlay -->
+    <svg id="cables-svg" class="absolute inset-0 w-full h-full pointer-events-none z-40"></svg>
+
+    <!-- Header Block (Standard Academic Document Heading) -->
+    <div class="border-b border-black pb-4 flex flex-col md:flex-row justify-between items-start md:items-end z-10">
+      <div>
+        <h1 class="text-2xl font-bold italic tracking-wide">Moog Synthesizer Model IIIc</h1>
+        <p class="text-xs italic mt-1 text-zinc-600">
+          An Electro-Acoustic Implementation of Discrete Signal Synthesizer $\mathbf{S}(t)$
+        </p>
+      </div>
+      
+      <!-- Audio System State Indicator -->
+      <div class="mt-3 md:mt-0 flex items-center gap-3 text-xs">
+        <span id="audio-status-badge" class="font-mono border border-black px-2 py-0.5">$\text{State}: \text{Uninitialized}$</span>
+      </div>
+    </div>
+
+    <!-- Experimental Operations / Preset Loaders -->
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-zinc-50 p-3 border border-black z-10 text-xs">
+      <div class="flex items-center gap-2">
+        <span class="font-bold">$\mathcal{P}_{\text{preset}}$:</span>
+        <button id="btn-reset" class="border border-black px-3 py-1 hover:bg-black hover:text-white transition">$\varnothing$ Clear All</button>
+        <button id="btn-preset-default" class="border border-black px-3 py-1 hover:bg-black hover:text-white transition">$\mathbf{P}_{1}$ Default Key Synth</button>
+        <button id="btn-preset-seq" class="border border-black px-3 py-1 hover:bg-black hover:text-white transition">$\mathbf{P}_{2}$ Sequence Melody</button>
+        <!-- FIXED: Class modified to match other presets (White bg, Black text on hover) -->
+        <button id="btn-preset-ymo" class="border border-black px-3 py-1 hover:bg-black hover:text-white transition">$\mathbf{P}_{3}$ YMO Click</button>
+      </div>
+
+      <!-- Line Styles Selector for Patches -->
+      <div class="flex items-center gap-2 font-mono text-[11px]">
+        <span>$\vec{\ell}_{\text{style}}$:</span>
+        <div class="flex gap-1">
+          <!-- Solid Line -->
+          <button class="line-btn border border-black px-2 py-0.5 bg-black text-white" data-style="solid" title="Solid Line">──</button>
+          <!-- Dashed Line -->
+          <button class="line-btn border border-black px-2 py-0.5 bg-white text-black" data-style="dashed" title="Dashed Line">- -</button>
+          <!-- Dotted Line -->
+          <button class="line-btn border border-black px-2 py-0.5 bg-white text-black" data-style="dotted" title="Dotted Line">⋯⋯</button>
+          <!-- Dash-Dot Line -->
+          <button class="line-btn border border-black px-2 py-0.5 bg-white text-black" data-style="dashdot" title="Dash-Dot Line">-·-</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- RACK CONTAINER (3 Rows of System Modules) -->
+    <div class="flex flex-col gap-6 relative">
+
+      <!-- ROW 1: Control Sequencer & Noise Source & Output interface -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        <!-- MODULE 960: Sequential Controller -->
+        <div class="lg:col-span-8 panel-academic p-4 flex flex-col justify-between z-10">
+          <div class="flex justify-between items-center mb-3 pb-1 border-b border-black">
+            <span class="font-bold">$\mathcal{M}_{960}$ (Sequential Controller)</span>
+            <div class="flex items-center gap-2 text-xs">
+              <span>Freq ($\nu$)</span>
+              <div class="knob-container" data-param="seq_tempo" data-min="60" data-max="480" data-val="140">
+                <div class="knob-polar"><div class="knob-center"></div><div class="knob-vector"></div></div>
+              </div>
+              <span id="tempo-val" class="font-mono bg-zinc-100 border border-black px-1.5 py-0.5">140BPM</span>
+            </div>
+          </div>
+
+          <!-- Step Coefficients Matrix -->
+          <div class="grid grid-cols-8 gap-2 py-2 text-center bg-zinc-50 border border-black p-2">
+            <!-- 8 Steps -->
+            <template id="seq-step-template">
+              <div class="flex flex-col items-center gap-1.5">
+                <span class="text-xs font-bold font-mono step-num-label">$x_{1,n}$</span>
+                <!-- Active Step State Symbol (bullet vs circ) - Unicode optimized for lag-free rendering -->
+                <span class="step-symbol font-bold text-xs select-none">○</span>
+                <!-- Value Knob -->
+                <div class="knob-container" data-param="seq_pitch" data-step="0" data-min="0" data-max="24" data-val="12">
+                  <div class="knob-polar w-8 h-8"><div class="knob-center"></div><div class="knob-vector"></div></div>
+                </div>
+                <!-- Label (Preprocessed text avoiding slow MathJax updates during drag) -->
+                <span class="text-[10px] font-mono step-pitch-label text-zinc-500">+12 st</span>
+              </div>
+            </template>
+            <div id="steps-container" class="contents"></div>
+          </div>
+
+          <!-- Module Controls & Terminal Jacks -->
+          <div class="flex justify-between items-center mt-4">
+            <div class="flex gap-4">
+              <!-- Circuit switch for loop execution -->
+              <div class="flex flex-col items-center">
+                <span class="text-[10px] text-zinc-500 mb-1">Clock Switch</span>
+                <div class="circuit-switch" id="seq-power">
+                  <div class="switch-line w-full"></div>
+                  <div class="switch-pole left-[5px]"></div>
+                  <div class="switch-pole right-[5px]"></div>
+                  <div class="switch-lever"></div>
+                </div>
+              </div>
+              
+              <!-- Auto Trigger gate -->
+              <div class="flex flex-col items-center">
+                <span class="text-[10px] text-zinc-500 mb-1">Auto Gate</span>
+                <div class="circuit-switch on" id="seq-auto-trigger">
+                  <div class="switch-line w-full"></div>
+                  <div class="switch-pole left-[5px]"></div>
+                  <div class="switch-pole right-[5px]"></div>
+                  <div class="switch-lever"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Terminal Jacks -->
+            <div class="flex gap-6">
+              <div class="flex flex-col items-center">
+                <span class="text-[10px] font-bold mb-1">$\mathbf{Y}_{\text{pitch}}$</span>
+                <div class="jack-socket" id="jack-seq_out" data-type="source" data-signal="cv"><div class="jack-inner"></div></div>
+              </div>
+              <div class="flex flex-col items-center">
+                <span class="text-[10px] font-bold mb-1">$\mathbf{Y}_{\text{trig}}$</span>
+                <div class="jack-socket" id="jack-seq_trig_out" data-type="source" data-signal="cv"><div class="jack-inner"></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- MODULE 905A: Noise Generator -->
+        <div class="lg:col-span-2 panel-academic p-4 flex flex-col justify-between z-10">
+          <div class="text-center mb-2 pb-1 border-b border-black">
+            <span class="font-bold">$\mathcal{M}_{905\mathrm{A}}$ (Noise)</span>
+          </div>
+          <div class="flex flex-col items-center justify-center py-2 flex-grow">
+            <span class="text-[10px] text-zinc-500 mb-1">Level ($\sigma^2$)</span>
+            <div class="knob-container" data-param="noise_level" data-min="0" data-max="1" data-val="0.5">
+              <div class="knob-polar"><div class="knob-center"></div><div class="knob-vector"></div></div>
+            </div>
+          </div>
+          <div class="flex flex-col items-center mt-2 pt-2 border-t border-black">
+            <span class="text-[10px] font-bold mb-1">$\mathbf{Y}_{\text{noise}}$</span>
+            <div class="jack-socket" id="jack-noise_out" data-type="source" data-signal="audio"><div class="jack-inner"></div></div>
+          </div>
+        </div>
+
+        <!-- MAIN INTERFACE: Output Level, Master Volume & Delay Processor -->
+        <div class="lg:col-span-2 panel-academic p-4 flex flex-col justify-between z-10">
+          <div class="text-center mb-1 pb-1 border-b border-black">
+            <span class="font-bold">$\mathcal{M}_{\text{out}}$ (Output)</span>
+          </div>
+          
+          <div class="flex flex-col gap-2 items-center flex-grow py-2 text-center text-xs">
+            <div class="flex justify-between w-full px-1">
+              <div class="flex flex-col items-center">
+                <span class="text-[9px] text-zinc-500">Amp ($A$)</span>
+                <div class="knob-container" data-param="master_volume" data-min="0" data-max="1.2" data-val="0.7">
+                  <div class="knob-polar"><div class="knob-center"></div><div class="knob-vector"></div></div>
+                </div>
+              </div>
+              <div class="flex flex-col items-center">
+                <span class="text-[9px] text-zinc-500">Feed ($\beta$)</span>
+                <div class="knob-container" data-param="delay_feedback" data-min="0" data-max="0.8" data-val="0.3">
+                  <div class="knob-polar"><div class="knob-center"></div><div class="knob-vector"></div></div>
+                </div>
+              </div>
+            </div>
+            
+            <div class="w-full flex justify-center mt-2">
+              <div class="flex flex-col items-center">
+                <span class="text-[9px] text-zinc-500">Delay ($\Delta t$)</span>
+                <div class="knob-container" data-param="delay_time" data-min="0.05" data-max="1" data-val="0.35">
+                  <div class="knob-polar"><div class="knob-center"></div><div class="knob-vector"></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex justify-center gap-4 mt-2 pt-2 border-t border-black">
+            <div class="flex flex-col items-center">
+              <span class="text-[10px] font-bold mb-1">$\mathbf{X}_{\text{stereo}}$</span>
+              <div class="jack-socket" id="jack-main_in" data-type="destination" data-signal="audio"><div class="jack-inner"></div></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ROW 2: Oscillators (Voltage Controlled Signal Generators) -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        
+        <!-- OSCILLATOR 1 (901-B #1) -->
+        <div class="panel-academic p-4 flex flex-col justify-between z-10">
+          <div class="flex justify-between items-center mb-2 pb-1 border-b border-black">
+            <span class="font-bold">$\mathcal{M}_{901\mathrm{B}}^{(1)}$ (Signal Generator)</span>
+            <span id="osc1-freq-display" class="text-xs font-mono bg-zinc-100 border border-black px-1.5">261 Hz</span>
+          </div>
+
+          <div class="grid grid-cols-4 gap-2 items-center py-2">
+            <!-- Freq Coarse -->
+            <div class="flex flex-col items-center">
+              <span class="text-[10px] text-zinc-500 mb-1">Coarse ($\nu_0$)</span>
+              <div class="knob-container" data-param="osc1_coarse" data-min="32" data-max="1000" data-val="261">
+                <div class="knob-polar"><div class="knob-center"></div><div class="knob-vector"></div></div>
+              </div>
+            </div>
+            
+            <!-- Fine Tune -->
+            <div class="flex flex-col items-center">
+              <span class="text-[10px] text-zinc-500 mb-1">Fine ($\delta\nu$)</span>
+              <div class="knob-container" data-param="osc1_fine" data-min="-100" data-max="100" data-val="0">
+                <div class="knob-polar"><div class="knob-center"></div><div class="knob-vector"></div></div>
+              </div>
+            </div>
+
+            <!-- Waveform Switch Selector -->
+            <div class="flex flex-col items-center col-span-2">
+              <span class="text-[10px] text-zinc-500 mb-1">Waveform Style</span>
+              <div class="flex gap-1 border border-black p-1 bg-zinc-50 w-full justify-around text-xs">
+                <button class="wave-btn active underline font-bold px-1" data-osc="1" data-wave="sawtooth">$\mathcal{W}_{\text{saw}}$</button>
+                <button class="wave-btn text-zinc-400 px-1" data-osc="1" data-wave="square">$\mathcal{W}_{\text{sqr}}$</button>
+                <button class="wave-btn text-zinc-400 px-1" data-osc="1" data-wave="triangle">$\mathcal{W}_{\text{tri}}$</button>
+                <button class="wave-btn text-zinc-400 px-1" data-osc="1" data-wave="sine">$\mathcal{W}_{\text{sin}}$</button>
+              </div>
+              
+              <div class="flex flex-col items-center mt-2 w-full">
+                <span class="text-[9px] text-zinc-500">Amplitude ($a$)</span>
+                <div class="knob-container" data-param="osc1_level" data-min="0" data-max="1" data-val="0.7">
+                  <div class="knob-polar w-8 h-8"><div class="knob-center"></div><div class="knob-vector"></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-4 gap-2 mt-2 pt-2 border-t border-black text-center">
+            <div class="flex flex-col items-center">
+              <span class="text-[10px] font-bold mb-1">$\mathbf{X}_{\text{pitch}}$</span>
+              <div class="jack-socket" id="jack-osc1_pitch" data-type="destination" data-signal="cv"><div class="jack-inner"></div></div>
+            </div>
+            <div class="flex flex-col items-center">
+              <span class="text-[10px] text-zinc-500 mb-1">Mod ($\mu$)</span>
+              <div class="knob-container" data-param="osc1_pitch_mod" data-min="0" data-max="2400" data-val="1200">
+                <div class="knob-polar w-6 h-6"><div class="knob-center"></div><div class="knob-vector"></div></div>
+              </div>
+            </div>
+            <div></div>
+            <div class="flex flex-col items-center">
+              <span class="text-[10px] font-bold mb-1">$\mathbf{Y}_{\text{sig}}$</span>
+              <div class="jack-socket" id="jack-osc1_out" data-type="source" data-signal="audio"><div class="jack-inner"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- OSCILLATOR 2 (901-B #2) -->
+        <div class="panel-academic p-4 flex flex-col justify-between z-10">
+          <div class="flex justify-between items-center mb-2 pb-1 border-b border-black">
+            <span class="font-bold">$\mathcal{M}_{901\mathrm{B}}^{(2)}$ (Signal Generator)</span>
+            <span id="osc2-freq-display" class="text-xs font-mono bg-zinc-100 border border-black px-1.5">261 Hz</span>
+          </div>
+
+          <div class="grid grid-cols-4 gap-2 items-center py-2">
+            <!-- Freq Coarse -->
+            <div class="flex flex-col items-center">
+              <span class="text-[10px] text-zinc-500 mb-1">Coarse ($\nu_0$)</span>
+              <div class="knob-container" data-param="osc2_coarse" data-min="32" data-max="1000" data-val="130">
+                <div class="knob-polar"><div class="knob-center"></div><div class="knob-vector"></div></div>
+              </div>
+            </div>
+            
+            <!-- Fine Tune -->
+            <div class="flex flex-col items-center">
+              <span class="text-[10px] text-zinc-500 mb-1">Fine ($\delta\nu$)</span>
+              <div class="knob-container" data-param="osc2_fine" data-min="-100" data-max="100" data-val="15">
+                <div class="knob-polar"><div class="knob-center"></div><div class="knob-vector"></div></div>
+              </div>
+            </div>
+
+            <!-- Waveform Selector -->
+            <div class="flex flex-col items-center col-span-2">
+              <span class="text-[10px] text-zinc-500 mb-1">Waveform Style</span>
+              <div class="flex gap-1 border border-black p-1 bg-zinc-50 w-full justify-around text-xs">
+                <button class="wave-btn active underline font-bold px-1" data-osc="2" data-wave="sawtooth">$\mathcal{W}_{\text{saw}}$</button>
+                <button class="wave-btn text-zinc-400 px-1" data-osc="2" data-wave="square">$\mathcal{W}_{\text{sqr}}$</button>
+                <button class="wave-btn text-zinc-400 px-1" data-osc="2" data-wave="triangle">$\mathcal{W}_{\text{tri}}$</button>
+                <button class="wave-btn text-zinc-400 px-1" data-osc="2" data-wave="sine">$\mathcal{W}_{\text{sin}}$</button>
+              </div>
+              
+              <div class="flex flex-col items-center mt-2 w-full">
+                <span class="text-[9px] text-zinc-500">Amplitude ($a$)</span>
+                <div class="knob-container" data-param="osc2_level" data-min="0" data-max="1" data-val="0.7">
+                  <div class="knob-polar w-8 h-8"><div class="knob-center"></div><div class="knob-vector"></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-4 gap-2 mt-2 pt-2 border-t border-black text-center">
+            <div class="flex flex-col items-center">
+              <span class="text-[10px] font-bold mb-1">$\mathbf{X}_{\text{pitch}}$</span>
+              <div class="jack-socket" id="jack-osc2_pitch" data-type="destination" data-signal="cv"><div class="jack-inner"></div></div>
+            </div>
+            <div class="flex flex-col items-center">
+              <span class="text-[10px] text-zinc-500 mb-1">Mod ($\mu$)</span>
+              <div class="knob-container" data-param="osc2_pitch_mod" data-min="0" data-max="2400" data-val="1200">
+                <div class="knob-polar w-6 h-6"><div class="knob-center"></div><div class="knob-vector"></div></div>
+              </div>
+            </div>
+            <div></div>
+            <div class="flex flex-col items-center">
+              <span class="text-[10px] font-bold mb-1">$\mathbf{Y}_{\text{sig}}$</span>
+              <div class="jack-socket" id="jack-osc2_out" data-type="source" data-signal="audio"><div class="jack-inner"></div></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ROW 3: VCF, VCA, and Envelope Processors -->
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+        
+        <!-- MODULE 904A: Voltage Controlled Low Pass Filter -->
+        <div class="panel-academic p-4 flex flex-col justify-between z-10">
+          <div class="text-center mb-2 pb-1 border-b border-black">
+            <span class="font-bold">$\mathcal{M}_{904\mathrm{A}}$ (Low Pass Filter)</span>
+          </div>
+          
+          <div class="flex flex-col gap-3 py-1 items-center">
+            <div class="flex justify-around w-full">
+              <div class="flex flex-col items-center">
+                <span class="text-[10px] text-zinc-500">Cutoff ($\omega_c$)</span>
+                <div class="knob-container" data-param="filter_cutoff" data-min="50" data-max="12000" data-val="1000">
+                  <div class="knob-polar w-10 h-10"><div class="knob-center"></div><div class="knob-vector"></div></div>
+                </div>
+              </div>
+              <div class="flex flex-col items-center">
+                <span class="text-[10px] text-zinc-500">Reso ($Q$)</span>
+                <div class="knob-container" data-param="filter_resonance" data-min="1" data-max="20" data-val="4">
+                  <div class="knob-polar w-10 h-10"><div class="knob-center"></div><div class="knob-vector"></div></div>
+                </div>
+              </div>
+            </div>
+            
+            <div class="flex flex-col items-center">
+              <span class="text-[10px] text-zinc-500 mb-1">Mod Depth ($\Delta\omega$)</span>
+              <div class="knob-container" data-param="filter_mod_amount" data-min="0" data-max="8000" data-val="4500">
+                <div class="knob-polar w-8 h-8"><div class="knob-center"></div><div class="knob-vector"></div></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-3 gap-1 mt-2 pt-2 border-t border-black text-center">
+            <div class="flex flex-col items-center">
+              <span class="text-[10px] font-bold mb-1">$\mathbf{X}_{\text{sig}}$</span>
+              <div class="jack-socket" id="jack-filter_in" data-type="destination" data-signal="audio"><div class="jack-inner"></div></div>
+            </div>
+            <div class="flex flex-col items-center">
+              <span class="text-[10px] font-bold mb-1">$\mathbf{X}_{\text{ctrl}}$</span>
+              <div class="jack-socket" id="jack-filter_ctrl" data-type="destination" data-signal="cv"><div class="jack-inner"></div></div>
+            </div>
+            <div class="flex flex-col items-center">
+              <span class="text-[10px] font-bold mb-1">$\mathbf{Y}_{\text{sig}}$</span>
+              <div class="jack-socket" id="jack-filter_out" data-type="source" data-signal="audio"><div class="jack-inner"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- MODULE 902: Voltage Controlled Amplifier -->
+        <div class="panel-academic p-4 flex flex-col justify-between z-10">
+          <div class="text-center mb-2 pb-1 border-b border-black">
+            <span class="font-bold">$\mathcal{M}_{902}$ (Amplifier)</span>
+          </div>
+
+          <div class="flex flex-col gap-4 py-1 items-center">
+            <div class="flex flex-col items-center">
+              <span class="text-[10px] text-zinc-500 mb-1">Bias Gain ($g_0$)</span>
+              <div class="knob-container" data-param="vca_initial_gain" data-min="0" data-max="1" data-val="0">
+                <div class="knob-polar w-10 h-10"><div class="knob-center"></div><div class="knob-vector"></div></div>
+              </div>
+            </div>
+
+            <div class="flex flex-col items-center">
+              <span class="text-[10px] text-zinc-500 mb-1">Control Scaling ($\alpha$)</span>
+              <div class="knob-container" data-param="vca_ctrl_amount" data-min="0" data-max="1" data-val="1">
+                <div class="knob-polar w-8 h-8"><div class="knob-center"></div><div class="knob-vector"></div></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-3 gap-1 mt-2 pt-2 border-t border-black text-center">
+            <div class="flex flex-col items-center">
+              <span class="text-[10px] font-bold mb-1">$\mathbf{X}_{\text{sig}}$</span>
+              <div class="jack-socket" id="jack-vca_in" data-type="destination" data-signal="audio"><div class="jack-inner"></div></div>
+            </div>
+            <div class="flex flex-col items-center">
+              <span class="text-[10px] font-bold mb-1">$\mathbf{X}_{\text{ctrl}}$</span>
+              <div class="jack-socket" id="jack-vca_ctrl" data-type="destination" data-signal="cv"><div class="jack-inner"></div></div>
+            </div>
+            <div class="flex flex-col items-center">
+              <span class="text-[10px] font-bold mb-1">$\mathbf{Y}_{\text{sig}}$</span>
+              <div class="jack-socket" id="jack-vca_out" data-type="source" data-signal="audio"><div class="jack-inner"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- MODULE 911: Envelope Generator 1 -->
+        <div class="panel-academic p-4 flex flex-col justify-between z-10">
+          <div class="text-center mb-2 pb-1 border-b border-black">
+            <span class="font-bold">$\mathcal{M}_{911}^{(1)}$ (Transient Env)</span>
+          </div>
+
+          <div class="grid grid-cols-2 gap-x-2 gap-y-3 py-1 text-center">
+            <div class="flex flex-col items-center">
+              <span class="text-[9px] text-zinc-500 mb-1">Attack ($\tau_a$)</span>
+              <div class="knob-container" data-param="env1_attack" data-min="0.001" data-max="3" data-val="0.05">
+                <div class="knob-polar"><div class="knob-center"></div><div class="knob-vector"></div></div>
+              </div>
+            </div>
+            <div class="flex flex-col items-center">
+              <span class="text-[9px] text-zinc-500 mb-1">Decay ($\tau_d$)</span>
+              <div class="knob-container" data-param="env1_decay" data-min="0.01" data-max="5" data-val="0.3">
+                <div class="knob-polar"><div class="knob-center"></div><div class="knob-vector"></div></div>
+              </div>
+            </div>
+            <div class="flex flex-col items-center">
+              <span class="text-[9px] text-zinc-500 mb-1">Sustain ($s$)</span>
+              <div class="knob-container" data-param="env1_sustain" data-min="0" data-max="1" data-val="0.6">
+                <div class="knob-polar"><div class="knob-center"></div><div class="knob-vector"></div></div>
+              </div>
+            </div>
+            <div class="flex flex-col items-center">
+              <span class="text-[9px] text-zinc-500 mb-1">Release ($\tau_r$)</span>
+              <div class="knob-container" data-param="env1_release" data-min="0.01" data-max="8" data-val="0.5">
+                <div class="knob-polar"><div class="knob-center"></div><div class="knob-vector"></div></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-1 mt-2 pt-2 border-t border-black text-center">
+            <div class="flex flex-col items-center">
+              <span class="text-[10px] font-bold mb-1">$\mathbf{X}_{\text{trig}}$</span>
+              <div class="jack-socket" id="jack-env1_trig" data-type="destination" data-signal="cv"><div class="jack-inner"></div></div>
+            </div>
+            <div class="flex flex-col items-center">
+              <span class="text-[10px] font-bold mb-1">$\mathbf{Y}_{\text{env}}$</span>
+              <div class="jack-socket" id="jack-env1_out" data-type="source" data-signal="cv"><div class="jack-inner"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- MODULE 911: Envelope Generator 2 -->
+        <div class="panel-academic p-4 flex flex-col justify-between z-10">
+          <div class="text-center mb-2 pb-1 border-b border-black">
+            <span class="font-bold">$\mathcal{M}_{911}^{(2)}$ (Transient Env)</span>
+          </div>
+
+          <div class="grid grid-cols-2 gap-x-2 gap-y-3 py-1 text-center">
+            <div class="flex flex-col items-center">
+              <span class="text-[9px] text-zinc-500 mb-1">Attack ($\tau_a$)</span>
+              <div class="knob-container" data-param="env2_attack" data-min="0.001" data-max="3" data-val="0.01">
+                <div class="knob-polar"><div class="knob-center"></div><div class="knob-vector"></div></div>
+              </div>
+            </div>
+            <div class="flex flex-col items-center">
+              <span class="text-[9px] text-zinc-500 mb-1">Decay ($\tau_d$)</span>
+              <div class="knob-container" data-param="env2_decay" data-min="0.01" data-max="5" data-val="0.2">
+                <div class="knob-polar"><div class="knob-center"></div><div class="knob-vector"></div></div>
+              </div>
+            </div>
+            <div class="flex flex-col items-center">
+              <span class="text-[9px] text-zinc-500 mb-1">Sustain ($s$)</span>
+              <div class="knob-container" data-param="env2_sustain" data-min="0" data-max="1" data-val="0.8">
+                <div class="knob-polar"><div class="knob-center"></div><div class="knob-vector"></div></div>
+              </div>
+            </div>
+            <div class="flex flex-col items-center">
+              <span class="text-[9px] text-zinc-500 mb-1">Release ($\tau_r$)</span>
+              <div class="knob-container" data-param="env2_release" data-min="0.01" data-max="8" data-val="0.4">
+                <div class="knob-polar"><div class="knob-center"></div><div class="knob-vector"></div></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-1 mt-2 pt-2 border-t border-black text-center">
+            <div class="flex flex-col items-center">
+              <span class="text-[10px] font-bold mb-1">$\mathbf{X}_{\text{trig}}$</span>
+              <div class="jack-socket" id="jack-env2_trig" data-type="destination" data-signal="cv"><div class="jack-inner"></div></div>
+            </div>
+            <div class="flex flex-col items-center">
+              <span class="text-[10px] font-bold mb-1">$\mathbf{Y}_{\text{env}}$</span>
+              <div class="jack-socket" id="jack-env2_out" data-type="source" data-signal="cv"><div class="jack-inner"></div></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div> <!-- End of Rack Container -->
+
+    <!-- KEYBOARD CONTROLLER MODULE (Interval Coordinate Axis) -->
+    <div class="panel-academic p-4 flex flex-col md:flex-row gap-6 justify-between items-stretch z-10">
+      
+      <!-- Keyboard CV Panel -->
+      <div class="md:w-1/4 flex flex-col justify-between border-b md:border-b-0 md:border-r border-black pb-4 md:pb-0 md:pr-6">
+        <div>
+          <span class="font-bold">$\mathcal{M}_{950}$ (Interval Generator)</span>
+          <p class="text-[11px] text-zinc-600 mt-1">
+            Outputs key-press pitch coordinate ($V_{\text{pitch}}$) and gate excitation envelope ($V_{\text{gate}}$).<br>
+            [PC Keys: A, S, D, F, G, H, J, K...]
+          </p>
+        </div>
+        
+        <div class="flex gap-6 mt-4 md:mt-0">
+          <div class="flex flex-col items-center">
+            <span class="text-[10px] font-bold mb-1">$\mathbf{Y}_{\text{pitch}}$</span>
+            <div class="jack-socket" id="jack-kb_pitch_out" data-type="source" data-signal="cv"><div class="jack-inner"></div></div>
+          </div>
+          <div class="flex flex-col items-center">
+            <span class="text-[10px] font-bold mb-1">$\mathbf{Y}_{\text{gate}}$</span>
+            <div class="jack-socket" id="jack-kb_gate_out" data-type="source" data-signal="cv"><div class="jack-inner"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Musical Keys (C3 to C5 represented as discrete coordinate cells) -->
+      <div class="md:w-3/4 flex-grow flex flex-col justify-end">
+        <div class="relative h-28 md:h-36 w-full flex border-t border-l border-black overflow-hidden" id="keyboard-container"></div>
+      </div>
+
+    </div>
+
+  </div> <!-- End of Scientific Container -->
+
+  <!-- Simple Help / Instructions (LaTeX Definition Frame) -->
+  <div class="max-w-7xl w-full mt-4 bg-white border border-black p-4 text-xs leading-relaxed">
+    <h3 class="font-bold text-sm mb-2">■ 定義および音響設計についての註釈 (YMOクリックの構築)</h3>
+    <p class="mb-2">
+      <strong>YMOクリックの設計理論:</strong> 
+      同期演奏において極めて重要な極短クリックパルス信号は、ホワイトノイズを最小限の過渡エンベロープで急峻に切り取ることにより構築されます。
+    </p>
+    <ul class="list-disc pl-5 space-y-1 text-zinc-700">
+      <li><strong>手順:</strong> 画面上部の「<strong>$\mathbf{P}_{3}$ YMO Click</strong>」をトリガーしてください。システムが自動パッチされ、定常的なパルス信号が再生されます。</li>
+      <li><strong>減衰（Decay）変調:</strong> $\mathcal{M}_{911}^{(2)}$（過渡エンベロープ）の Decay つまみを調節することで、クリックの「カッ」という音の長さをミリ秒単位で制御可能です。</li>
+      <li><strong>周波数（Cutoff）濾波:</strong> $\mathcal{M}_{904\mathrm{A}}$（フィルター）の Cutoff を変化させることで、パルスの周波数帯域を操作し、硬質な「カッ」から温かみのある「コッ」まで音色を自由に調整できます。</li>
+    </ul>
+  </div>
+
+  <script>
+    // --- WEB AUDIO SYNTH ARCHITECTURE ---
+    let actx = null;
+    let synth = null;
+
+    // Configuration Parameter Storage
+    const OSC_WAVES = { 1: 'sawtooth', 2: 'sawtooth' };
+    const params = {
+      seq_tempo: 140,
+      seq_auto_trigger: 1,
+      
+      noise_level: 0.5,
+
+      master_volume: 0.7,
+      delay_time: 0.35,
+      delay_feedback: 0.3,
+
+      osc1_coarse: 130,
+      osc1_fine: 0,
+      osc1_level: 0.7,
+      osc1_pitch_mod: 1200, // 1200 cents = 1.0 Volts per octave
+
+      osc2_coarse: 130,
+      osc2_fine: 15,
+      osc2_level: 0.7,
+      osc2_pitch_mod: 1200,
+
+      filter_cutoff: 1000,
+      filter_resonance: 4,
+      filter_mod_amount: 3500,
+
+      vca_initial_gain: 0.0,
+      vca_ctrl_amount: 1.0,
+
+      env1_attack: 0.05,
+      env1_decay: 0.3,
+      env1_sustain: 0.6,
+      env1_release: 0.5,
+
+      env2_attack: 0.01,
+      env2_decay: 0.2,
+      env2_sustain: 0.8,
+      env2_release: 0.4,
+    };
+
+    const seqStepPitches = [12, 15, 19, 24, 26, 24, 19, 15];
+
+    // MathJax Helper Function to safely render equations asynchronously
+    function typesetMath() {
+      if (window.MathJax && window.MathJax.typesetPromise) {
+        window.MathJax.typesetPromise();
+      }
+    }
+
+    // Setup Web Audio Nodes
+    async function initAudio() {
+      if (!actx) {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        actx = new AudioContext();
+
+        synth = {
+          // Source Generators
+          osc1: actx.createOscillator(),
+          osc2: actx.createOscillator(),
+          noise: createNoiseNode(actx),
+
+          // CV Constant Value Source Modules
+          kbPitchSource: actx.createConstantSource(),
+          kbGateSource: actx.createConstantSource(),
+          seqSource: actx.createConstantSource(),
+          env1Source: actx.createConstantSource(),
+          env2Source: actx.createConstantSource(),
+
+          // Node Amplification Levels
+          osc1Level: actx.createGain(),
+          osc2Level: actx.createGain(),
+          noiseLevel: actx.createGain(),
+
+          // System Modifiers
+          osc1PitchModGain: actx.createGain(),
+          osc2PitchModGain: actx.createGain(),
+          filterModGain: actx.createGain(),
+          vcaCtrlGain: actx.createGain(),
+
+          // Filter and Gate (VCF, VCA)
+          filter: actx.createBiquadFilter(),
+          vca: actx.createGain(),
+
+          // Stereo Matrix
+          mainIn: actx.createGain(),
+          delayNode: actx.createDelay(2.0),
+          delayFeedback: actx.createGain(),
+          masterGain: actx.createGain()
+        };
+
+        synth.osc1.type = OSC_WAVES[1];
+        synth.osc1.frequency.value = params.osc1_coarse;
+        synth.osc1.start();
+
+        synth.osc2.type = OSC_WAVES[2];
+        synth.osc2.frequency.value = params.osc2_coarse;
+        synth.osc2.start();
+
+        synth.noise.start();
+
+        synth.kbPitchSource.offset.value = 0.0;
+        synth.kbPitchSource.start();
+
+        synth.kbGateSource.offset.value = 0.0;
+        synth.kbGateSource.start();
+
+        synth.seqSource.offset.value = 0.0;
+        synth.seqSource.start();
+
+        synth.env1Source.offset.value = 0.0;
+        synth.env1Source.start();
+
+        synth.env2Source.offset.value = 0.0;
+        synth.env2Source.start();
+
+        synth.osc1.connect(synth.osc1Level);
+        synth.osc2.connect(synth.osc2Level);
+        synth.noise.connect(synth.noiseLevel);
+
+        updateSynthParams();
+
+        synth.osc1PitchModGain.connect(synth.osc1.detune);
+        synth.osc2PitchModGain.connect(synth.osc2.detune);
+        synth.filterModGain.connect(synth.filter.frequency);
+        synth.vcaCtrlGain.connect(synth.vca.gain);
+
+        synth.mainIn.connect(synth.masterGain);
+        synth.mainIn.connect(synth.delayNode);
+        synth.delayNode.connect(synth.delayFeedback);
+        synth.delayFeedback.connect(synth.delayNode);
+        synth.delayFeedback.connect(synth.masterGain);
+
+        synth.masterGain.connect(actx.destination);
+      }
+
+      if (actx && actx.state === 'suspended') {
+        await actx.resume();
+      }
+
+      updateStatusBadge();
+    }
+
+    function updateStatusBadge() {
+      const badge = document.getElementById('audio-status-badge');
+      if (!actx) return;
+      if (actx.state === 'running') {
+        badge.innerHTML = "$\\text{State}: \\text{Running}$";
+      } else {
+        badge.innerHTML = `$\\text{State}: \\text{${actx.state.toUpperCase()}}$`;
+      }
+      typesetMath();
+    }
+
+    function createNoiseNode(ctx) {
+      const bufferSize = 2 * ctx.sampleRate;
+      const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const output = noiseBuffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        output[i] = Math.random() * 2 - 1;
+      }
+      const whiteNoise = ctx.createBufferSource();
+      whiteNoise.buffer = noiseBuffer;
+      whiteNoise.loop = true;
+      return whiteNoise;
+    }
+
+    function updateSynthParams() {
+      if (!synth) return;
+
+      synth.noiseLevel.gain.value = params.noise_level;
+      synth.masterGain.gain.value = params.master_volume;
+      synth.delayNode.delayTime.value = params.delay_time;
+      synth.delayFeedback.gain.value = params.delay_feedback;
+
+      const baseFreq1 = params.osc1_coarse * Math.pow(2, params.osc1_fine / 1200);
+      synth.osc1.frequency.setValueAtTime(baseFreq1, actx.currentTime);
+      synth.osc1Level.gain.value = params.osc1_level;
+      synth.osc1PitchModGain.gain.value = params.osc1_pitch_mod;
+
+      const baseFreq2 = params.osc2_coarse * Math.pow(2, params.osc2_fine / 1200);
+      synth.osc2.frequency.setValueAtTime(baseFreq2, actx.currentTime);
+      synth.osc2Level.gain.value = params.osc2_level;
+      synth.osc2PitchModGain.gain.value = params.osc2_pitch_mod;
+
+      synth.filter.frequency.value = params.filter_cutoff;
+      synth.filter.Q.value = params.filter_resonance;
+      synth.filterModGain.gain.value = params.filter_mod_amount;
+
+      synth.vca.gain.value = params.vca_initial_gain;
+      synth.vcaCtrlGain.gain.value = params.vca_ctrl_amount;
+    }
+
+
+    // --- ENVELOPE CONTROLLERS (TRIGGER ADSR LOGIC) ---
+    function triggerEnvelopeOn(envNum) {
+      if (!actx || !synth) return;
+      const t = actx.currentTime;
+      
+      const envSource = envNum === 1 ? synth.env1Source : synth.env2Source;
+      const a = params[envNum === 1 ? 'env1_attack' : 'env2_attack'];
+      const d = params[envNum === 1 ? 'env1_decay' : 'env2_decay'];
+      const s = params[envNum === 1 ? 'env1_sustain' : 'env2_sustain'];
+
+      envSource.offset.cancelScheduledValues(t);
+      envSource.offset.setValueAtTime(envSource.offset.value, t);
+      envSource.offset.linearRampToValueAtTime(1.0, t + a);
+      envSource.offset.exponentialRampToValueAtTime(Math.max(s, 0.001), t + a + d);
+    }
+
+    function triggerEnvelopeOff(envNum) {
+      if (!actx || !synth) return;
+      const t = actx.currentTime;
+
+      const envSource = envNum === 1 ? synth.env1Source : synth.env2Source;
+      const r = params[envNum === 1 ? 'env1_release' : 'env2_release'];
+      
+      envSource.offset.cancelScheduledValues(t);
+      envSource.offset.setValueAtTime(envSource.offset.value, t);
+      envSource.offset.exponentialRampToValueAtTime(0.0001, t + r);
+      envSource.offset.setValueAtTime(0, t + r);
+    }
+
+
+    // --- PATCH PANEL SYSTEM (CONNECTIONS) ---
+    function getJackNodeAndParam(jackId) {
+      if (!synth) return null;
+      
+      const mappings = {
+        'jack-osc1_out': { node: synth.osc1Level },
+        'jack-osc2_out': { node: synth.osc2Level },
+        'jack-noise_out': { node: synth.noiseLevel },
+        'jack-filter_out': { node: synth.filter },
+        'jack-vca_out': { node: synth.vca },
+        'jack-env1_out': { node: synth.env1Source },
+        'jack-env2_out': { node: synth.env2Source },
+        'jack-seq_out': { node: synth.seqSource },
+        'jack-kb_pitch_out': { node: synth.kbPitchSource },
+        'jack-kb_gate_out': { node: synth.kbGateSource },
+
+        'jack-filter_in': { node: synth.filter },
+        'jack-vca_in': { node: synth.vca },
+        'jack-main_in': { node: synth.mainIn },
+        'jack-osc1_pitch': { node: synth.osc1PitchModGain },
+        'jack-osc2_pitch': { node: synth.osc2PitchModGain },
+        'jack-filter_ctrl': { node: synth.filterModGain },
+        'jack-vca_ctrl': { node: synth.vcaCtrlGain },
+        
+        'jack-env1_trig': { special: 'env1_trig' },
+        'jack-env2_trig': { special: 'env2_trig' },
+        'jack-seq_trig_out': { special: 'seq_trig' }
+      };
+
+      return mappings[jackId];
+    }
+
+    let patchCables = [];
+    let dragStartJack = null;
+    let selectedLineStyle = 'solid'; // Custom LaTeX Line Pattern (solid, dashed, dotted, dashdot)
+
+    async function connectPatchCable(fromId, toId, lineStyle) {
+      await initAudio();
+      
+      const fromObj = getJackNodeAndParam(fromId);
+      const toObj = getJackNodeAndParam(toId);
+
+      if (!fromObj || !toObj) return false;
+
+      if (!fromObj.special && !toObj.special) {
+        try {
+          fromObj.node.connect(toObj.node);
+        } catch (e) {
+          console.error("Connection failed", e);
+        }
+      }
+
+      const cableId = 'cable_' + Math.random().toString(36).substring(2, 9);
+      patchCables.push({
+        id: cableId,
+        from: fromId,
+        to: toId,
+        style: lineStyle
+      });
+
+      document.getElementById(fromId).classList.add('active');
+      document.getElementById(toId).classList.add('active');
+
+      renderCables();
+      return true;
+    }
+
+    function disconnectPatchCable(cableId) {
+      const index = patchCables.findIndex(c => c.id === cableId);
+      if (index === -1) return;
+
+      const cable = patchCables[index];
+      const fromObj = getJackNodeAndParam(cable.from);
+      const toObj = getJackNodeAndParam(cable.to);
+
+      if (fromObj && toObj && !fromObj.special && !toObj.special) {
+        try {
+          fromObj.node.disconnect(toObj.node);
+        } catch (e) {
+          console.warn(e);
+        }
+      }
+
+      patchCables.splice(index, 1);
+
+      updateJackActiveStyles();
+      renderCables();
+      rebuildAudioConnections();
+    }
+
+    function updateJackActiveStyles() {
+      const allJacks = document.querySelectorAll('.jack-socket');
+      allJacks.forEach(jack => {
+        const jackId = jack.id;
+        const isConnected = patchCables.some(c => c.from === jackId || c.to === jackId);
+        if (isConnected) {
+          jack.classList.add('active');
+        } else {
+          jack.classList.remove('active');
+        }
+      });
+    }
+
+    function rebuildAudioConnections() {
+      if (!synth) return;
+      
+      const nodesToDisconnect = [
+        synth.osc1Level, synth.osc2Level, synth.noiseLevel,
+        synth.kbPitchSource, synth.kbGateSource, synth.seqSource,
+        synth.env1Source, synth.env2Source, synth.filter, synth.vca
+      ];
+      
+      nodesToDisconnect.forEach(node => {
+        try {
+          node.disconnect();
+        } catch (e) {}
+      });
+
+      synth.osc1PitchModGain.connect(synth.osc1.detune);
+      synth.osc2PitchModGain.connect(synth.osc2.detune);
+      synth.filterModGain.connect(synth.filter.frequency);
+      synth.vcaCtrlGain.connect(synth.vca.gain);
+      synth.mainIn.connect(synth.masterGain);
+      synth.mainIn.connect(synth.delayNode);
+
+      patchCables.forEach(cable => {
+        const fromObj = getJackNodeAndParam(cable.from);
+        const toObj = getJackNodeAndParam(cable.to);
+        if (fromObj && toObj && !fromObj.special && !toObj.special) {
+          try {
+            fromObj.node.connect(toObj.node);
+          } catch(e) {}
+        }
+      });
+    }
+
+    function clearAllCables() {
+      if (synth) {
+        patchCables.forEach(cable => {
+          const fromObj = getJackNodeAndParam(cable.from);
+          const toObj = getJackNodeAndParam(cable.to);
+          if (fromObj && toObj && !fromObj.special && !toObj.special) {
+            try { fromObj.node.disconnect(toObj.node); } catch(e){}
+          }
+        });
+      }
+      patchCables = [];
+      updateJackActiveStyles();
+      renderCables();
+    }
+
+
+    // --- SVG CABLE DRAWING UTILITIES ---
+    const cablesSvg = document.getElementById('cables-svg');
+
+    function renderCables() {
+      cablesSvg.innerHTML = '';
+      
+      // Temporary dragging cable
+      if (dragStartJack && mousePos) {
+        const startRect = dragStartJack.getBoundingClientRect();
+        const containerRect = cablesSvg.getBoundingClientRect();
+        const startX = startRect.left + startRect.width / 2 - containerRect.left;
+        const startY = startRect.top + startRect.height / 2 - containerRect.top;
+        
+        drawCablePath(startX, startY, mousePos.x, mousePos.y, selectedLineStyle, true);
+      }
+
+      // Existing cables
+      patchCables.forEach(cable => {
+        const fromEl = document.getElementById(cable.from);
+        const toEl = document.getElementById(cable.to);
+        if (!fromEl || !toEl) return;
+
+        const fromRect = fromEl.getBoundingClientRect();
+        const toRect = toEl.getBoundingClientRect();
+        const containerRect = cablesSvg.getBoundingClientRect();
+
+        const x1 = fromRect.left + fromRect.width / 2 - containerRect.left;
+        const y1 = fromRect.top + fromRect.height / 2 - containerRect.top;
+        const x2 = toRect.left + toRect.width / 2 - containerRect.left;
+        const y2 = toRect.top + toRect.height / 2 - containerRect.top;
+
+        drawCablePath(x1, y1, x2, y2, cable.style, false, cable.id);
+      });
+    }
+
+    function drawCablePath(x1, y1, x2, y2, lineStyle, isTemp, cableId = null) {
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      
+      const sag = Math.max(distance * 0.45, 50);
+      
+      const cp1x = x1;
+      const cp1y = y1 + sag;
+      const cp2x = x2;
+      const cp2y = y2 + sag;
+
+      const d = `M ${x1} ${y1} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${x2} ${y2}`;
+      
+      path.setAttribute('d', d);
+      path.setAttribute('stroke', '#000000'); // Always monochrome black
+      path.setAttribute('stroke-width', '1.5'); // Classical precise schematic line width
+      path.setAttribute('fill', 'none');
+      path.setAttribute('stroke-linecap', 'round');
+      
+      // Determine Line Pattern (dashed, dotted etc.)
+      if (lineStyle === 'dashed') {
+        path.setAttribute('stroke-dasharray', '8,6');
+      } else if (lineStyle === 'dotted') {
+        path.setAttribute('stroke-dasharray', '2,4');
+      } else if (lineStyle === 'dashdot') {
+        path.setAttribute('stroke-dasharray', '12,4,2,4');
+      } else {
+        path.setAttribute('stroke-dasharray', 'none'); // Solid Line
+      }
+
+      if (isTemp) {
+        path.setAttribute('opacity', '0.5');
+      } else {
+        path.setAttribute('opacity', '1.0');
+        path.style.pointerEvents = 'stroke';
+        path.classList.add('cursor-pointer', 'transition-all', 'duration-150');
+        
+        // Hover highlight: Make line bolder
+        path.addEventListener('mouseenter', () => {
+          path.setAttribute('stroke-width', '4');
+        });
+        path.addEventListener('mouseleave', () => {
+          path.setAttribute('stroke-width', '1.5');
+        });
+
+        path.addEventListener('dblclick', (e) => {
+          e.stopPropagation();
+          disconnectPatchCable(cableId);
+        });
+      }
+
+      cablesSvg.appendChild(path);
+    }
+
+    let mousePos = null;
+    
+    window.addEventListener('mousemove', (e) => {
+      if (!dragStartJack) return;
+      const containerRect = cablesSvg.getBoundingClientRect();
+      mousePos = {
+        x: e.clientX - containerRect.left,
+        y: e.clientY - containerRect.top
+      };
+      renderCables();
+    });
+
+    window.addEventListener('mouseup', () => {
+      if (dragStartJack) {
+        dragStartJack = null;
+        mousePos = null;
+        renderCables();
+      }
+    });
+
+    window.addEventListener('touchmove', (e) => {
+      if (!dragStartJack) return;
+      const containerRect = cablesSvg.getBoundingClientRect();
+      const touch = e.touches[0];
+      mousePos = {
+        x: touch.clientX - containerRect.left,
+        y: touch.clientY - containerRect.top
+      };
+      renderCables();
+    }, { passive: true });
+
+    window.addEventListener('touchend', (e) => {
+      if (dragStartJack) {
+        const touch = e.changedTouches[0];
+        const elem = document.elementFromPoint(touch.clientX, touch.clientY);
+        const jack = elem ? elem.closest('.jack-socket') : null;
+        if (jack) {
+          handleCableDrop(jack);
+        }
+        dragStartJack = null;
+        mousePos = null;
+        renderCables();
+      }
+    });
+
+
+    // --- SEQUENCER 960 (CLOCK & AUTOMATION) ---
+    let seqIntervalId = null;
+    let seqRunning = false;
+    let currentSeqStep = 0;
+
+    async function startSequencer() {
+      if (seqRunning) return;
+      await initAudio();
+      seqRunning = true;
+      currentSeqStep = 0;
+      document.getElementById('seq-power').classList.add('on');
+      
+      tickSequencer();
+    }
+
+    function stopSequencer() {
+      seqRunning = false;
+      document.getElementById('seq-power').classList.remove('on');
+      clearTimeout(seqIntervalId);
+      
+      // Reset Step Indicators - using light weight character
+      const symbols = document.querySelectorAll('.step-symbol');
+      symbols.forEach(sym => {
+        sym.innerHTML = "○";
+      });
+    }
+
+    function tickSequencer() {
+      if (!seqRunning || !synth) return;
+
+      const symbols = document.querySelectorAll('.step-symbol');
+      symbols.forEach((sym, idx) => {
+        if (idx === currentSeqStep) {
+          sym.innerHTML = "●"; // Active Step (Unicode filled bullet)
+        } else {
+          sym.innerHTML = "○"; // Inactive Step (Unicode open circle)
+        }
+      });
+
+      const stepPitchOffset = seqStepPitches[currentSeqStep];
+      const voltValue = stepPitchOffset / 12.0;
+      
+      synth.seqSource.offset.setValueAtTime(voltValue, actx.currentTime);
+
+      const autoTrig = params.seq_auto_trigger === 1;
+      
+      const hasTrigToEnv1 = patchCables.some(c => c.from === 'jack-seq_trig_out' && c.to === 'jack-env1_trig');
+      const hasTrigToEnv2 = patchCables.some(c => c.from === 'jack-seq_trig_out' && c.to === 'jack-env2_trig');
+
+      if (autoTrig || hasTrigToEnv1) {
+        triggerEnvelopeOn(1);
+        setTimeout(() => triggerEnvelopeOff(1), 50);
+      }
+      if (autoTrig || hasTrigToEnv2) {
+        triggerEnvelopeOn(2);
+        setTimeout(() => triggerEnvelopeOff(2), 50);
+      }
+
+      currentSeqStep = (currentSeqStep + 1) % 8;
+
+      const stepTime = 60000 / params.seq_tempo / 2;
+      seqIntervalId = setTimeout(tickSequencer, stepTime);
+    }
+
+
+    // --- VIRTUAL KEYBOARD CONTROLLER & KEYS ---
+    const KEY_NOTES = [
+      { note: 'C3', midi: 48, isBlack: false },
+      { note: 'C#3', midi: 49, isBlack: true },
+      { note: 'D3', midi: 50, isBlack: false },
+      { note: 'D#3', midi: 51, isBlack: true },
+      { note: 'E3', midi: 52, isBlack: false },
+      { note: 'F3', midi: 53, isBlack: false },
+      { note: 'F#3', midi: 54, isBlack: true },
+      { note: 'G3', midi: 55, isBlack: false },
+      { note: 'G#3', midi: 56, isBlack: true },
+      { note: 'A3', midi: 57, isBlack: false },
+      { note: 'A#3', midi: 58, isBlack: true },
+      { note: 'B3', midi: 59, isBlack: false },
+      { note: 'C4', midi: 60, isBlack: false },
+      { note: 'C#4', midi: 61, isBlack: true },
+      { note: 'D4', midi: 62, isBlack: false },
+      { note: 'D#4', midi: 63, isBlack: true },
+      { note: 'E4', midi: 64, isBlack: false },
+      { note: 'F4', midi: 65, isBlack: false },
+      { note: 'F#4', midi: 66, isBlack: true },
+      { note: 'G4', midi: 67, isBlack: false },
+      { note: 'G#4', midi: 68, isBlack: true },
+      { note: 'A4', midi: 69, isBlack: false },
+      { note: 'A#4', midi: 70, isBlack: true },
+      { note: 'B4', midi: 71, isBlack: false },
+      { note: 'C5', midi: 72, isBlack: false },
+    ];
+
+    // State trackers for Keyboard Interaction
+    let isMouseDown = false;
+    let currentlyPressedKeys = new Set();
+    let lastTouchedNote = null; // Touch swipe navigator
+
+    window.addEventListener('mousedown', () => {
+      isMouseDown = true;
+    });
+
+    window.addEventListener('mouseup', () => {
+      isMouseDown = false;
+      // Clear all active keys to prevent stuck notes
+      const notesToRelease = Array.from(currentlyPressedKeys);
+      notesToRelease.forEach(note => {
+        releaseTone(note);
+      });
+    });
+
+    function createKeyboard() {
+      const container = document.getElementById('keyboard-container');
+      container.innerHTML = '';
+
+      const whiteKeysCount = KEY_NOTES.filter(k => !k.isBlack).length;
+      const whiteKeyWidth = 100 / whiteKeysCount; // width percentage for each white key
+      
+      KEY_NOTES.forEach((keyData, index) => {
+        const keyEl = document.createElement('div');
+        keyEl.dataset.note = keyData.note;
+        keyEl.dataset.midi = keyData.midi;
+        
+        if (keyData.isBlack) {
+          keyEl.className = 'black-key absolute h-2/3 z-10 transition-colors cursor-pointer';
+          const prevWhiteKeys = KEY_NOTES.slice(0, index).filter(k => !k.isBlack).length;
+          // Align black keys accurately centered between adjacent white keys
+          const leftPercent = (prevWhiteKeys - 0.3) * whiteKeyWidth;
+          keyEl.style.left = `${leftPercent}%`;
+          keyEl.style.width = `${whiteKeyWidth * 0.6}%`;
+        } else {
+          keyEl.className = 'white-key absolute h-full flex items-end justify-center pb-2 text-[10px] font-mono text-zinc-500 transition-colors cursor-pointer';
+          const prevWhiteKeys = KEY_NOTES.slice(0, index).filter(k => !k.isBlack).length;
+          const leftPercent = prevWhiteKeys * whiteKeyWidth;
+          keyEl.style.left = `${leftPercent}%`;
+          keyEl.style.width = `${whiteKeyWidth}%`;
+          // Mathematical Interval Label
+          keyEl.innerHTML = `$\\omega_{${keyData.midi}}$`;
+        }
+
+        // --- GLISSANDO / INTERACTION EVENT LISTENERS ---
+        const play = (e) => {
+          e.preventDefault();
+          if (e.type === 'mousedown') {
+            isMouseDown = true;
+          }
+          playTone(keyData.midi, keyData.note);
+        };
+
+        const enter = (e) => {
+          if (isMouseDown) {
+            playTone(keyData.midi, keyData.note);
+          }
+        };
+
+        const leave = (e) => {
+          releaseTone(keyData.note);
+        };
+
+        const stop = (e) => {
+          e.preventDefault();
+          releaseTone(keyData.note);
+        };
+
+        keyEl.addEventListener('mousedown', play);
+        keyEl.addEventListener('mouseenter', enter);
+        keyEl.addEventListener('mouseleave', leave);
+        keyEl.addEventListener('mouseup', stop);
+
+        container.appendChild(keyEl);
+      });
+
+      // --- TOUCH GLISSANDO SUPPORT ---
+      container.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        const touch = e.touches[0];
+        const elem = document.elementFromPoint(touch.clientX, touch.clientY);
+        const keyEl = elem ? elem.closest('#keyboard-container > div') : null;
+        if (keyEl) {
+          const note = keyEl.dataset.note;
+          const midi = parseInt(keyEl.dataset.midi);
+          if (note) {
+            playTone(midi, note);
+            lastTouchedNote = note;
+          }
+        }
+      }, { passive: false });
+
+      container.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        const touch = e.touches[0];
+        const elem = document.elementFromPoint(touch.clientX, touch.clientY);
+        const keyEl = elem ? elem.closest('#keyboard-container > div') : null;
+        if (keyEl) {
+          const note = keyEl.dataset.note;
+          const midi = parseInt(keyEl.dataset.midi);
+          if (note && note !== lastTouchedNote) {
+            if (lastTouchedNote) {
+              releaseTone(lastTouchedNote);
+            }
+            playTone(midi, note);
+            lastTouchedNote = note;
+          }
+        }
+      }, { passive: false });
+
+      container.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        if (lastTouchedNote) {
+          releaseTone(lastTouchedNote);
+          lastTouchedNote = null;
+        }
+      }, { passive: false });
+
+      // Trigger MathJax rendering once keyboard elements are generated
+      typesetMath();
+    }
+
+    // Monophonic Priority Sounding Architecture (Last-Note-Priority)
+    async function playTone(midiNumber, noteName) {
+      await initAudio();
+      
+      const t = actx.currentTime;
+      const voltValue = (midiNumber - 48) / 12.0;
+      
+      currentlyPressedKeys.add(noteName);
+
+      // Set hardware CV values immediately
+      synth.kbPitchSource.offset.setValueAtTime(voltValue, t);
+      synth.kbGateSource.offset.setValueAtTime(1.0, t);
+
+      // Light up selected key
+      const keyEl = document.querySelector(`[data-note="${noteName}"]`);
+      if (keyEl) keyEl.classList.add('active');
+
+      const isTrigEnv1 = patchCables.some(c => c.from === 'jack-kb_gate_out' && c.to === 'jack-env1_trig');
+      const isTrigEnv2 = patchCables.some(c => c.from === 'jack-kb_gate_out' && c.to === 'jack-env2_trig');
+
+      if (isTrigEnv1) triggerEnvelopeOn(1);
+      if (isTrigEnv2) triggerEnvelopeOn(2);
+    }
+
+    function releaseTone(noteName) {
+      if (!synth) return;
+      const t = actx.currentTime;
+      
+      currentlyPressedKeys.delete(noteName);
+
+      // Remove light up state
+      const keyEl = document.querySelector(`[data-note="${noteName}"]`);
+      if (keyEl) keyEl.classList.remove('active');
+
+      if (currentlyPressedKeys.size === 0) {
+        // Zero keys held -> Drop the Gate CV and trigger Release
+        synth.kbGateSource.offset.setValueAtTime(0.0, t);
+
+        const isTrigEnv1 = patchCables.some(c => c.from === 'jack-kb_gate_out' && c.to === 'jack-env1_trig');
+        const isTrigEnv2 = patchCables.some(c => c.from === 'jack-kb_gate_out' && c.to === 'jack-env2_trig');
+
+        if (isTrigEnv1) triggerEnvelopeOff(1);
+        if (isTrigEnv2) triggerEnvelopeOff(2);
+      } else {
+        // Still keys left in the priority stack -> Retrigger pitch to the latest key pressed
+        const remainingNotes = Array.from(currentlyPressedKeys);
+        const lastNote = remainingNotes[remainingNotes.length - 1];
+        const lastKeyData = KEY_NOTES.find(k => k.note === lastNote);
+        if (lastKeyData) {
+          const voltValue = (lastKeyData.midi - 48) / 12.0;
+          synth.kbPitchSource.offset.setValueAtTime(voltValue, t);
+        }
+      }
+    }
+
+    // --- PC KEYBOARD SUPPORT (Triggers Monophonic Stack Similarly) ---
+    const KEY_MAP = {
+      'a': 48,
+      'w': 49,
+      's': 50,
+      'e': 51,
+      'd': 52,
+      'f': 53,
+      't': 54,
+      'g': 55,
+      'y': 56,
+      'h': 57,
+      'u': 58,
+      'j': 59,
+      'k': 60,
+      'o': 61,
+      'l': 62,
+      'p': 63,
+      ';': 64,
+    };
+
+    let activeKeys = {};
+
+    window.addEventListener('keydown', (e) => {
+      if (e.repeat) return;
+      const key = e.key.toLowerCase();
+      if (KEY_MAP[key]) {
+        const midi = KEY_MAP[key];
+        const match = KEY_NOTES.find(k => k.midi === midi);
+        if (match) {
+          activeKeys[key] = match.note;
+          playTone(midi, match.note);
+        }
+      }
+    });
+
+    window.addEventListener('keyup', (e) => {
+      const key = e.key.toLowerCase();
+      if (activeKeys[key]) {
+        releaseTone(activeKeys[key]);
+        delete activeKeys[key];
+      }
+    });
+
+
+    // --- UI EVENT LISTENERS (KNOBS & SWITCHES) ---
+    function initUI() {
+      const stepsContainer = document.getElementById('steps-container');
+      const stepTemplate = document.getElementById('seq-step-template');
+      
+      for (let i = 0; i < 8; i++) {
+        const clone = stepTemplate.content.cloneNode(true);
+        clone.querySelector('.step-num-label').innerText = `$a_{1,${i+1}}$`;
+        
+        const knobContainer = clone.querySelector('.knob-container');
+        knobContainer.dataset.step = i;
+        knobContainer.dataset.val = seqStepPitches[i];
+        
+        const pitchLabel = clone.querySelector('.step-pitch-label');
+        pitchLabel.innerText = `+${seqStepPitches[i]} st`;
+
+        stepsContainer.appendChild(clone);
+      }
+
+      const knobContainers = document.querySelectorAll('.knob-container');
+      knobContainers.forEach(container => {
+        const knob = container.querySelector('.knob-polar');
+        const min = parseFloat(container.dataset.min);
+        const max = parseFloat(container.dataset.max);
+        const val = parseFloat(container.dataset.val);
+        const paramName = container.dataset.param;
+        const stepIndex = container.dataset.step;
+
+        let angle = valueToAngle(val, min, max);
+        const vector = knob.querySelector('.knob-vector');
+        vector.style.transform = `rotate(${angle}deg)`;
+
+        updateDisplayForParam(paramName, val);
+
+        let isDragging = false;
+        let startY = 0;
+        let startAngle = 0;
+
+        const startDrag = (e) => {
+          isDragging = true;
+          startY = e.clientY || e.touches[0].clientY;
+          startAngle = angle;
+          document.body.style.cursor = 'ns-resize';
+          e.preventDefault();
+        };
+
+        const onDrag = (e) => {
+          if (!isDragging) return;
+          const currentY = e.clientY || e.touches[0].clientY;
+          const diffY = startY - currentY;
+          
+          const rotationSpeed = 1.5;
+          let newAngle = startAngle + diffY * rotationSpeed;
+          
+          newAngle = Math.max(-135, Math.min(135, newAngle));
+          angle = newAngle;
+          vector.style.transform = `rotate(${angle}deg)`;
+
+          const newVal = angleToValue(angle, min, max);
+
+          if (stepIndex !== undefined) {
+            const idx = parseInt(stepIndex);
+            const roundedVal = Math.round(newVal);
+            seqStepPitches[idx] = roundedVal;
+            // Kept simple text update to prevent MathJax lag during mouse drag
+            container.nextElementSibling.innerText = `+${roundedVal} st`;
+          } else {
+            params[paramName] = newVal;
+            updateSynthParams();
+            updateDisplayForParam(paramName, newVal);
+          }
+        };
+
+        const stopDrag = () => {
+          isDragging = false;
+          document.body.style.cursor = 'default';
+        };
+
+        container.addEventListener('mousedown', startDrag);
+        window.addEventListener('mousemove', onDrag);
+        window.addEventListener('mouseup', stopDrag);
+
+        container.addEventListener('touchstart', startDrag, { passive: false });
+        window.addEventListener('touchmove', onDrag, { passive: false });
+        window.addEventListener('touchend', stopDrag);
+      });
+
+      const jacks = document.querySelectorAll('.jack-socket');
+      jacks.forEach(jack => {
+        jack.addEventListener('mousedown', (e) => {
+          e.stopPropagation();
+          dragStartJack = jack;
+          const rect = jack.getBoundingClientRect();
+          const containerRect = cablesSvg.getBoundingClientRect();
+          mousePos = {
+            x: rect.left + rect.width / 2 - containerRect.left,
+            y: rect.top + rect.height / 2 - containerRect.top
+          };
+          renderCables();
+        });
+
+        jack.addEventListener('mouseup', (e) => {
+          e.stopPropagation();
+          handleCableDrop(jack);
+        });
+
+        jack.addEventListener('touchstart', (e) => {
+          e.stopPropagation();
+          dragStartJack = jack;
+          const rect = jack.getBoundingClientRect();
+          const containerRect = cablesSvg.getBoundingClientRect();
+          mousePos = {
+            x: rect.left + rect.width / 2 - containerRect.left,
+            y: rect.top + rect.height / 2 - containerRect.top
+          };
+          renderCables();
+        }, { passive: true });
+      });
+
+      const waveBtns = document.querySelectorAll('.wave-btn');
+      waveBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+          const oscNum = btn.dataset.osc;
+          const wave = btn.dataset.wave;
+          OSC_WAVES[oscNum] = wave;
+
+          document.querySelectorAll(`.wave-btn[data-osc="${oscNum}"]`).forEach(b => {
+            b.classList.remove('active', 'underline', 'font-bold');
+            b.classList.add('text-zinc-400');
+          });
+          btn.classList.add('active', 'underline', 'font-bold');
+          btn.classList.remove('text-zinc-400');
+
+          if (synth) {
+            synth[`osc${oscNum}`].type = wave;
+          }
+        });
+      });
+
+      // Scientific Circuit switches toggles (On Click)
+      const switches = document.querySelectorAll('.circuit-switch');
+      switches.forEach(sw => {
+        sw.addEventListener('click', () => {
+          if (sw.id === 'seq-power') {
+            if (seqRunning) {
+              stopSequencer();
+              sw.classList.remove('on');
+            } else {
+              startSequencer();
+              sw.classList.add('on');
+            }
+          } else if (sw.id === 'seq-auto-trigger') {
+            if (params.seq_auto_trigger === 1) {
+              params.seq_auto_trigger = 0;
+              sw.classList.remove('on');
+            } else {
+              params.seq_auto_trigger = 1;
+              sw.classList.add('on');
+            }
+          }
+        });
+      });
+
+      // Line Style selector triggers (changes CSS/SVG stroke classes instead of color)
+      const lineBtns = document.querySelectorAll('.line-btn');
+      lineBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+          lineBtns.forEach(b => {
+            b.classList.remove('bg-black', 'text-white');
+            b.classList.add('bg-white', 'text-black');
+          });
+          btn.classList.add('bg-black', 'text-white');
+          btn.classList.remove('bg-white', 'text-black');
+          selectedLineStyle = btn.dataset.style;
+        });
+      });
+
+      document.getElementById('btn-reset').addEventListener('click', clearAllCables);
+      document.getElementById('btn-preset-default').addEventListener('click', loadDefaultPatch);
+      document.getElementById('btn-preset-seq').addEventListener('click', loadSequencePatch);
+      document.getElementById('btn-preset-ymo').addEventListener('click', loadYmoClickPatch);
+
+      // Render static page mathematical formulas
+      typesetMath();
+    }
+
+    function handleCableDrop(jack) {
+      if (!dragStartJack) return;
+      if (dragStartJack.id === jack.id) return;
+
+      const fromType = dragStartJack.dataset.type;
+      const toType = jack.dataset.type;
+
+      if (fromType !== toType) {
+        const fromId = fromType === 'source' ? dragStartJack.id : jack.id;
+        const toId = fromType === 'destination' ? dragStartJack.id : jack.id;
+
+        const exists = patchCables.some(c => c.from === fromId && c.to === toId);
+        if (!exists) {
+          connectPatchCable(fromId, toId, selectedLineStyle);
+        }
+      }
+
+      dragStartJack = null;
+      mousePos = null;
+      renderCables();
+    }
+
+    // --- PRESETS LOAD LOGIC ---
+    async function loadDefaultPatch() {
+      clearAllCables();
+      await initAudio();
+
+      params.vca_initial_gain = 0.0;
+      params.vca_ctrl_amount = 1.0;
+      params.filter_cutoff = 1000;
+      params.filter_resonance = 4;
+      params.filter_mod_amount = 4500;
+      
+      params.osc1_coarse = 130;
+      params.osc1_fine = 0;
+      params.osc2_coarse = 130;
+      params.osc2_fine = 15;
+
+      updateSynthParams();
+      syncAllKnobUI();
+
+      // Configure Preset Connections
+      await connectPatchCable('jack-kb_pitch_out', 'jack-osc1_pitch', 'solid');
+      await connectPatchCable('jack-kb_pitch_out', 'jack-osc2_pitch', 'solid');
+      await connectPatchCable('jack-kb_gate_out', 'jack-env1_trig', 'dashed');
+      await connectPatchCable('jack-kb_gate_out', 'jack-env2_trig', 'dashed');
+      await connectPatchCable('jack-osc1_out', 'jack-filter_in', 'solid');
+      await connectPatchCable('jack-osc2_out', 'jack-filter_in', 'solid');
+      await connectPatchCable('jack-filter_out', 'jack-vca_in', 'solid');
+      await connectPatchCable('jack-env1_out', 'jack-filter_ctrl', 'dotted');
+      await connectPatchCable('jack-env2_out', 'jack-vca_ctrl', 'dashdot');
+      await connectPatchCable('jack-vca_out', 'jack-main_in', 'solid');
+    }
+
+    async function loadSequencePatch() {
+      clearAllCables();
+      await initAudio();
+
+      params.vca_initial_gain = 0.0;
+      params.vca_ctrl_amount = 1.0;
+      params.filter_cutoff = 800;
+      params.filter_resonance = 10;
+      params.filter_mod_amount = 6000;
+      
+      params.osc1_coarse = 65.4;
+      params.osc1_level = 0.9;
+      params.osc2_level = 0.0;
+
+      updateSynthParams();
+      syncAllKnobUI();
+
+      await connectPatchCable('jack-seq_out', 'jack-osc1_pitch', 'solid');
+      await connectPatchCable('jack-seq_trig_out', 'jack-env1_trig', 'dashed');
+      await connectPatchCable('jack-seq_trig_out', 'jack-env2_trig', 'dashed');
+      await connectPatchCable('jack-osc1_out', 'jack-filter_in', 'solid');
+      await connectPatchCable('jack-filter_out', 'jack-vca_in', 'solid');
+      await connectPatchCable('jack-env1_out', 'jack-filter_ctrl', 'dotted');
+      await connectPatchCable('jack-env2_out', 'jack-vca_ctrl', 'dashdot');
+      await connectPatchCable('jack-vca_out', 'jack-main_in', 'solid');
+
+      await startSequencer();
+    }
+
+    // --- YMO CLICK PRESET FUNCTION ---
+    async function loadYmoClickPatch() {
+      clearAllCables();
+      await initAudio();
+
+      params.vca_initial_gain = 0.0;
+      params.vca_ctrl_amount = 1.0;
+      
+      // Filter setup: Band-pass / Low-pass around 2800 Hz for high metal click
+      params.filter_cutoff = 2800;
+      params.filter_resonance = 8;
+      params.filter_mod_amount = 0; // Fix cutoff frequency static
+
+      // Noise source level
+      params.noise_level = 0.8;
+
+      // Extreme short envelope settings (The secret recipe of YMO click)
+      params.env2_attack = 0.001; // Instant transition (1ms)
+      params.env2_decay = 0.04;   // Fast snap (40ms)
+      params.env2_sustain = 0.0;  // Zero sustain volume
+      params.env2_release = 0.02;  // Snappy release
+
+      params.seq_tempo = 120; // Tempo: 120 BPM
+
+      updateSynthParams();
+      syncAllKnobUI();
+
+      // Connections:
+      // 1. Noise Generator -> Filter In
+      await connectPatchCable('jack-noise_out', 'jack-filter_in', 'solid');
+      
+      // 2. Filter Out -> VCA In
+      await connectPatchCable('jack-filter_out', 'jack-vca_in', 'solid');
+      
+      // 3. Sequencer Step Trigger Out -> Envelope 2 Trigger In
+      await connectPatchCable('jack-seq_trig_out', 'jack-env2_trig', 'dashed');
+      
+      // 4. Envelope 2 CV Out -> VCA Gain CV In
+      await connectPatchCable('jack-env2_out', 'jack-vca_ctrl', 'dashdot');
+      
+      // 5. VCA Out -> Master Output
+      await connectPatchCable('jack-vca_out', 'jack-main_in', 'solid');
+
+      await startSequencer();
+    }
+
+    // --- REVOLUTIONARY UTILS ---
+    function angleToValue(angle, min, max) {
+      const ratio = (angle + 135) / 270;
+      return min + ratio * (max - min);
+    }
+
+    function valueToAngle(val, min, max) {
+      const ratio = (val - min) / (max - min);
+      return (ratio * 270) - 135;
+    }
+
+    function updateDisplayForParam(name, val) {
+      if (name === 'seq_tempo') {
+        const d = document.getElementById('tempo-val');
+        if (d) d.innerText = `${Math.round(val)}BPM`;
+      } else if (name === 'osc1_coarse') {
+        const d = document.getElementById('osc1-freq-display');
+        if (d) d.innerText = `${Math.round(val)} Hz`;
+      } else if (name === 'osc2_coarse') {
+        const d = document.getElementById('osc2-freq-display');
+        if (d) d.innerText = `${Math.round(val)} Hz`;
+      }
+    }
+
+    function syncAllKnobUI() {
+      const knobContainers = document.querySelectorAll('.knob-container');
+      knobContainers.forEach(container => {
+        const knob = container.querySelector('.knob-polar');
+        const min = parseFloat(container.dataset.min);
+        const max = parseFloat(container.dataset.max);
+        const paramName = container.dataset.param;
+        const stepIndex = container.dataset.step;
+
+        const vector = knob.querySelector('.knob-vector');
+
+        if (paramName && params[paramName] !== undefined) {
+          const val = params[paramName];
+          const angle = valueToAngle(val, min, max);
+          vector.style.transform = `rotate(${angle}deg)`;
+          updateDisplayForParam(paramName, val);
+        } else if (stepIndex !== undefined) {
+          const idx = parseInt(stepIndex);
+          const val = seqStepPitches[idx];
+          const angle = valueToAngle(val, min, max);
+          vector.style.transform = `rotate(${angle}deg)`;
+          container.nextElementSibling.innerText = `+${val} st`;
+        }
+      });
+    }
+
+    window.addEventListener('resize', () => {
+      renderCables();
+    });
+
+    window.onload = function() {
+      createKeyboard();
+      initUI();
+      setTimeout(renderCables, 200);
+    };
+
+  </script>
+</body>
+</html>
